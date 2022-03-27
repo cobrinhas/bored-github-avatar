@@ -1,0 +1,144 @@
+import base64
+import json
+import random
+import sys
+from time import sleep
+
+from xmlrpclib import ServerProxy, Fault
+from hashlib import md5
+from os import listdir
+from os.path import isfile, join
+
+delay_between_uploads_in_seconds = 2 * 60 * 60
+already_uploaded_images_cache_file_path = '.already_uploaded_images_cache'
+
+# code taken from: https://stackoverflow.com/a/26099199 (with some slight modifications)
+
+
+class GravatarXMLRPC(object):
+    API_URI = 'https://secure.gravatar.com/xmlrpc?user={0}'
+
+    def __init__(self, email, password=''):
+        self.password = password
+        self.email = sanitize_email(email)
+        self.email_hash = md5_hash(self.email)
+        self._server = ServerProxy(
+            self.API_URI.format(self.email_hash)
+        )
+
+    def saveData(self, image):
+        params = {'data': base64_encode(image), 'rating': 0, }
+
+        return self._call('saveData', params)
+
+    def useUserImage(self, userImage, addresses=[]):
+        params = {'userimage': userImage, 'addresses': addresses}
+
+        return self._call('useUserimage', params)
+
+    def addresses(self):
+        params = {}
+
+        return self._call('addresses', params)
+
+    def _call(self, method, params={}):
+        args = {'password': self.password, }
+        args.update(params)
+
+        try:
+            return getattr(self._server, 'grav.' + method, None)(args)
+        except Fault as error:
+            error_msg = "Server error: {1} (error code: {0})"
+            print(error_msg.format(error.faultCode, error.faultString))
+
+
+def base64_encode(obj):
+    return base64.b64encode(obj)
+
+
+def sanitize_email(email):
+    return email.lower().strip()
+
+
+def md5_hash(string):
+    return md5(string.encode('utf-8')).hexdigest()
+
+
+def get_dir_file_paths(dir_path):
+    return [join(dir_path, f) for f in listdir(dir_path) if isfile(join(dir_path, f))]
+
+
+def get_random_image_file_path(dir_path):
+    return random.choice(get_dir_file_paths(dir_path))
+
+
+def read_file(file_path, flag='r'):
+    return open(file_path, flag).read()
+
+
+def write_file(file_path, data, flag='w'):
+    return open(file_path, flag).write(data)
+
+
+def load_already_uploaded_images(cached_uploaded_images_file_path=already_uploaded_images_cache_file_path):
+    data = read_file(already_uploaded_images_cache_file_path)
+    if len(data) == 0:
+        data = '{}'
+
+    return json.loads(data)
+
+
+def cache_already_uploaded_images(
+    already_uploaded_images,
+    cached_uploaded_images_file_path=already_uploaded_images_cache_file_path,
+):
+    return write_file(
+        cached_uploaded_images_file_path,
+        json.dumps(already_uploaded_images)
+    )
+
+
+def main():
+    # python zazaza.cobrinha <email> <password> <images_dir_path>
+
+    if len(sys.argv) < 4:
+        print('Missing arguments! (python zazaza.cobrinha <email> <password> <images_dir_path>)')
+        exit(-1)
+
+    email = sys.argv[1]
+    password = sys.argv[2]
+    images_dir_path = sys.argv[3]
+
+    gravatar = GravatarXMLRPC(email, password)
+
+    while True:
+        try:
+            already_uploaded_images = load_already_uploaded_images()
+            random_image_file_path = get_random_image_file_path(
+                images_dir_path,
+            )
+
+            user_image = getattr(already_uploaded_images,
+                                 random_image_file_path, None)
+
+            if user_image == None:
+                random_image_bytes = read_file(
+                    random_image_file_path, flag='rb'
+                )
+
+                user_image = gravatar.saveData(random_image_bytes)
+                already_uploaded_images[random_image_bytes] = user_image
+
+            gravatar.useUserImage(user_image, addresses=[email])
+
+            print('Uploaded & used: {0}'.format(random_image_file_path))
+
+        except Exception as error:
+            print('spaghetti -> {0}'.format(error))
+
+        print('Sleeping now!')
+        sleep(delay_between_uploads_in_seconds)
+
+
+if __name__ == "__main__":
+    main()
