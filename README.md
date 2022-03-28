@@ -16,13 +16,18 @@ Requires `Python 2(.7)` to run.
 4. Get some images you would like to use as your GitHub avatar.
 5. Run!
 
-`python zazaza.cobrinha <email> <password> <images_dir_path>`
+`python zazaza.cobrinha <email> <password> <images_dir_path> <dont_sleep=no>`
 
 If you are in an Unix environment, use `screen` or `nohup` to launch script as a background process.
 
 Example with `screen`:
 
 `screen -dmS cobrinhahihisewiiii -- python zazaza.cobrinha <email> <password> <images_dir_path>`
+
+
+---------
+
+If would like to schedule a cron job instead of letting program to sleep, just pass `yes` next to <images_dir_path>
 
 ## Credits
 
