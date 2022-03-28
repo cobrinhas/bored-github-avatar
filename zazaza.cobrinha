@@ -56,6 +56,10 @@ def base64_encode(obj):
     return base64.b64encode(obj)
 
 
+def base64_decode(obj):
+    return base64.b64decode(obj)
+
+
 def sanitize_email(email):
     return email.lower().strip()
 
@@ -83,9 +87,9 @@ def write_file(file_path, data, flag='w'):
 def load_already_uploaded_images(cached_uploaded_images_file_path=already_uploaded_images_cache_file_path):
     data = read_file(already_uploaded_images_cache_file_path)
     if len(data) == 0:
-        data = '{}'
+        data = base64_encode('{}')
 
-    return json.loads(data)
+    return json.loads(base64_decode(data))
 
 
 def cache_already_uploaded_images(
@@ -94,20 +98,22 @@ def cache_already_uploaded_images(
 ):
     return write_file(
         cached_uploaded_images_file_path,
-        json.dumps(already_uploaded_images)
+        base64_encode(json.dumps(already_uploaded_images)),
+        flag='wb'
     )
 
 
 def main():
-    # python zazaza.cobrinha <email> <password> <images_dir_path>
+    # python zazaza.cobrinha <email> <password> <images_dir_path> <dont_sleep>?
 
     if len(sys.argv) < 4:
-        print('Missing arguments! (python zazaza.cobrinha <email> <password> <images_dir_path>)')
+        print('Missing arguments! (python zazaza.cobrinha <email> <password> <images_dir_path> <dont_sleep>?)')
         exit(-1)
 
     email = sys.argv[1]
     password = sys.argv[2]
     images_dir_path = sys.argv[3]
+    dont_sleep = True if len(sys.argv) > 4 and sys.argv[4] == 'yes' else False
 
     gravatar = GravatarXMLRPC(email, password)
 
@@ -127,17 +133,21 @@ def main():
                 )
 
                 user_image = gravatar.saveData(random_image_bytes)
-                already_uploaded_images[random_image_bytes] = user_image
 
+            already_uploaded_images[random_image_file_path] = user_image
             gravatar.useUserImage(user_image, addresses=[email])
 
             print('Uploaded & used: {0}'.format(random_image_file_path))
 
+            cache_already_uploaded_images(already_uploaded_images)
         except Exception as error:
             print('spaghetti -> {0}'.format(error))
 
-        print('Sleeping now!')
-        sleep(delay_between_uploads_in_seconds)
+        if dont_sleep == False:
+            print('Sleeping now!')
+            sleep(delay_between_uploads_in_seconds)
+        else:
+            exit(1)
 
 
 if __name__ == "__main__":
